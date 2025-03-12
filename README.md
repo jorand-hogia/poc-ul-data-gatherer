@@ -10,14 +10,18 @@ This is a FastAPI application that collects and processes transit data from Upps
 - Implements an event-based API using WebSockets for real-time notifications
 - Integrated startup - all components start simultaneously
 - Supports manual triggering of data collection cycles
+- Docker containerization for easy deployment
 
 ## Requirements
 
 - Python 3.8+
 - PostgreSQL database
 - Environment variables (see `.env.example`)
+- Docker (optional, for containerized deployment)
 
 ## Setup
+
+### Local Setup
 
 1. Clone this repository
 2. Create and activate a virtual environment
@@ -25,11 +29,22 @@ This is a FastAPI application that collects and processes transit data from Upps
 4. Set up environment variables (copy `.env.example` to `.env` and modify as needed)
 5. Create a PostgreSQL database and update the `.env` file with the connection details
 
+### Docker Setup
+
+1. Clone this repository
+2. Create a `.env` file based on `.env.example`
+3. Run with Docker Compose:
+   ```bash
+   docker-compose up -d
+   ```
+
+This will start both the application and a PostgreSQL database. The application will be available at http://localhost:8001.
+
 ## Running the Application
 
-### Integrated Startup
+### Local Startup
 
-The application now features an integrated startup process that ensures all components start simultaneously:
+The application features an integrated startup process that ensures all components start simultaneously:
 
 ```bash
 python run.py
@@ -40,6 +55,31 @@ This will:
 2. Start the background data collection scheduler
 3. Trigger an initial data collection cycle
 4. Set up event broadcasting
+
+### Docker Startup
+
+```bash
+# Build and start containers
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop containers
+docker-compose down
+```
+
+### Using the Pre-built Docker Image
+
+You can also use our pre-built Docker image from GitHub Container Registry:
+
+```bash
+# Pull the latest image
+docker pull ghcr.io/jorand-hogia/poc-ul-data-gatherer:latest
+
+# Run the container with your .env file
+docker run -d --name ul-data-collector -p 8001:8001 --env-file .env ghcr.io/jorand-hogia/poc-ul-data-gatherer:latest
+```
 
 ### Testing the API
 
@@ -123,6 +163,16 @@ You can manually trigger data collection outside the regular schedule:
 ```bash
 curl -X POST http://localhost:8001/api/v1/events/trigger-event/data_collection_start
 ```
+
+## Docker CI/CD
+
+This project uses GitHub Actions to automatically:
+1. Build the Docker image
+2. Run tests
+3. Push the Docker image to GitHub Container Registry
+4. Create a new release when a tag is pushed
+
+The Docker image is built and pushed on every push to the `master` branch and when a new tag is created.
 
 ## Error Handling
 
