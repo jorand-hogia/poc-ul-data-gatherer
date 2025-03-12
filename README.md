@@ -1,0 +1,132 @@
+# UL Transit Data Collector
+
+This is a FastAPI application that collects and processes transit data from Uppsala Lokaltrafik (UL), providing real-time vehicle positions and an event-based API for subscribers to receive updates.
+
+## Features
+
+- Collects vehicle position data from UL's GTFS Realtime API at a specified interval
+- Stores vehicle position data in a PostgreSQL database
+- Provides REST API endpoints for retrieving vehicle positions
+- Implements an event-based API using WebSockets for real-time notifications
+- Integrated startup - all components start simultaneously
+- Supports manual triggering of data collection cycles
+
+## Requirements
+
+- Python 3.8+
+- PostgreSQL database
+- Environment variables (see `.env.example`)
+
+## Setup
+
+1. Clone this repository
+2. Create and activate a virtual environment
+3. Install dependencies: `pip install -r requirements.txt`
+4. Set up environment variables (copy `.env.example` to `.env` and modify as needed)
+5. Create a PostgreSQL database and update the `.env` file with the connection details
+
+## Running the Application
+
+### Integrated Startup
+
+The application now features an integrated startup process that ensures all components start simultaneously:
+
+```bash
+python run.py
+```
+
+This will:
+1. Start the FastAPI application with all API endpoints
+2. Start the background data collection scheduler
+3. Trigger an initial data collection cycle
+4. Set up event broadcasting
+
+### Testing the API
+
+A test client script is included to verify that the API is working correctly:
+
+```bash
+python test_client.py
+```
+
+The test client:
+1. Checks the health endpoint to verify the API is running
+2. Lists available event types
+3. Retrieves the latest vehicle positions
+4. Connects to the WebSocket API
+5. Subscribes to various event types
+6. Triggers a data collection cycle
+7. Listens for events and logs them
+
+If successful, you should see output confirming each step and showing the events received.
+
+## API Documentation
+
+When the application is running, you can access the API documentation at:
+- Swagger UI: `http://localhost:8001/docs`
+- ReDoc: `http://localhost:8001/redoc`
+
+## API Endpoints
+
+### Health Check
+
+- `GET /health` - Returns the health status of the application
+
+### Vehicle Positions
+
+- `GET /api/v1/vehicle-positions/latest` - Returns the latest vehicle positions
+- `GET /api/v1/vehicle-positions/history/{vehicle_id}` - Returns the position history for a specific vehicle
+
+### Event-Based API
+
+The application provides an event-based API that allows clients to subscribe to events and receive real-time updates.
+
+#### Event Types
+
+- `vehicle_position_update` - Triggered when a vehicle position is updated
+- `vehicle_route_change` - Triggered when a vehicle changes its route
+- `data_collection_start` - Triggered to start a new data collection cycle
+- `data_collection_complete` - Triggered when a data collection cycle is complete
+
+#### REST Endpoints
+
+- `GET /api/v1/events/event-types` - Returns the list of available event types
+- `POST /api/v1/events/trigger-event/{event_type}` - Triggers an event of the specified type
+- `GET /api/v1/events/history/{event_type}` - Returns the history of events of the specified type
+
+#### WebSocket Endpoint
+
+- `WebSocket /api/v1/events/ws/{client_id}` - Connects to the event stream
+  - After connecting, send a subscription message: `{"action": "subscribe", "event_types": ["event_type1", "event_type2"]}`
+  - To unsubscribe: `{"action": "unsubscribe", "event_types": ["event_type1"]}`
+
+## Integration with Other Systems
+
+Other systems can integrate with this application in several ways:
+
+1. **REST API**: Make HTTP requests to the REST API endpoints
+2. **WebSocket API**: Connect to the WebSocket endpoint and subscribe to events
+3. **Manual Trigger**: Trigger data collection or other events using the `trigger-event` endpoint
+
+## Monitoring
+
+The application provides a health check endpoint at `/health` that returns the current state of the application, including:
+- API readiness status
+- Database connection status
+- Scheduler status
+- Current timestamp
+
+## Manual Control
+
+You can manually trigger data collection outside the regular schedule:
+
+```bash
+curl -X POST http://localhost:8001/api/v1/events/trigger-event/data_collection_start
+```
+
+## Error Handling
+
+The application includes robust error handling for:
+- Connection issues with the GTFS Realtime API
+- Database connection problems
+- Invalid WebSocket subscriptions 

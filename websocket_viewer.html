@@ -1,0 +1,414 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UL Transit Data WebSocket Viewer</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            line-height: 1.6;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .card {
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .controls {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        button {
+            background-color: #4CAF50;
+            border: none;
+            color: white;
+            padding: 10px 15px;
+            text-align: center;
+            text-decoration: none;
+            display: inline-block;
+            font-size: 14px;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        button.secondary {
+            background-color: #2196F3;
+        }
+        button.secondary:hover {
+            background-color: #0b7dda;
+        }
+        button.danger {
+            background-color: #f44336;
+        }
+        button.danger:hover {
+            background-color: #d32f2f;
+        }
+        .status {
+            font-weight: bold;
+        }
+        .connected {
+            color: green;
+        }
+        .disconnected {
+            color: red;
+        }
+        .events {
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            background-color: #f9f9f9;
+        }
+        .event {
+            margin-bottom: 5px;
+            padding: 8px;
+            border-radius: 4px;
+        }
+        .event-data {
+            background-color: #e8f5e9;
+            border-left: 4px solid #4CAF50;
+        }
+        .event-start {
+            background-color: #e3f2fd;
+            border-left: 4px solid #2196F3;
+        }
+        .event-complete {
+            background-color: #fff9c4;
+            border-left: 4px solid #fbc02d;
+        }
+        .event-error {
+            background-color: #ffebee;
+            border-left: 4px solid #f44336;
+        }
+        pre {
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            margin: 0;
+        }
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            background-color: #757575;
+            margin-right: 5px;
+        }
+        .badge-position {
+            background-color: #4CAF50;
+        }
+        .badge-start {
+            background-color: #2196F3;
+        }
+        .badge-complete {
+            background-color: #fbc02d;
+            color: black;
+        }
+        .badge-route {
+            background-color: #9c27b0;
+        }
+        .stats {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        .stat-card {
+            flex: 1 1 200px;
+            background-color: #f5f5f5;
+            border-radius: 8px;
+            padding: 15px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+        }
+        .config {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+        input, select {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .map-container {
+            height: 400px;
+            margin-top: 20px;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+    </style>
+</head>
+<body>
+    <h1>UL Transit Data WebSocket Viewer</h1>
+    
+    <div class="container">
+        <div class="card">
+            <h2>WebSocket Connection</h2>
+            <div class="config">
+                <input type="text" id="wsUrl" value="ws://localhost:8001/api/v1/events/ws/browser-client" style="width: 350px;">
+                <button id="connectBtn">Connect</button>
+                <button id="disconnectBtn" disabled class="danger">Disconnect</button>
+            </div>
+            <p>Status: <span id="status" class="status disconnected">Disconnected</span></p>
+            
+            <div class="controls">
+                <div>
+                    <label for="eventType">Subscribe to:</label>
+                    <select id="eventType">
+                        <option value="vehicle_position_update">Vehicle Positions</option>
+                        <option value="vehicle_route_change">Route Changes</option>
+                        <option value="data_collection_start">Collection Start</option>
+                        <option value="data_collection_complete">Collection Complete</option>
+                        <option value="all">All Events</option>
+                    </select>
+                    <button id="subscribeBtn" disabled>Subscribe</button>
+                </div>
+                <button id="triggerCollectionBtn" class="secondary">Trigger Data Collection</button>
+                <button id="clearEventsBtn">Clear Events</button>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>Statistics</h2>
+            <div class="stats">
+                <div class="stat-card">
+                    <div class="stat-value" id="totalEventsCount">0</div>
+                    <div class="stat-label">Total Events</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="positionUpdatesCount">0</div>
+                    <div class="stat-label">Position Updates</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="routeChangesCount">0</div>
+                    <div class="stat-label">Route Changes</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" id="collectionCycles">0</div>
+                    <div class="stat-label">Collection Cycles</div>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <h2>Events</h2>
+            <div id="events" class="events">
+                <div class="event">Waiting for events...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // Elements
+            const wsUrlInput = document.getElementById('wsUrl');
+            const connectBtn = document.getElementById('connectBtn');
+            const disconnectBtn = document.getElementById('disconnectBtn');
+            const statusEl = document.getElementById('status');
+            const eventsContainer = document.getElementById('events');
+            const eventTypeSelect = document.getElementById('eventType');
+            const subscribeBtn = document.getElementById('subscribeBtn');
+            const triggerCollectionBtn = document.getElementById('triggerCollectionBtn');
+            const clearEventsBtn = document.getElementById('clearEventsBtn');
+            
+            // Stats elements
+            const totalEventsCount = document.getElementById('totalEventsCount');
+            const positionUpdatesCount = document.getElementById('positionUpdatesCount');
+            const routeChangesCount = document.getElementById('routeChangesCount');
+            const collectionCycles = document.getElementById('collectionCycles');
+            
+            // Variables
+            let socket = null;
+            let stats = {
+                total: 0,
+                positions: 0,
+                routes: 0,
+                collections: 0
+            };
+            
+            // Functions
+            function updateStats() {
+                totalEventsCount.textContent = stats.total;
+                positionUpdatesCount.textContent = stats.positions;
+                routeChangesCount.textContent = stats.routes;
+                collectionCycles.textContent = stats.collections;
+            }
+            
+            function addEvent(event, type) {
+                const eventEl = document.createElement('div');
+                eventEl.className = `event event-${type}`;
+                
+                let badge = '';
+                if (type === 'data') {
+                    badge = '<span class="badge badge-position">Position</span>';
+                    stats.positions++;
+                } else if (type === 'start') {
+                    badge = '<span class="badge badge-start">Start</span>';
+                } else if (type === 'complete') {
+                    badge = '<span class="badge badge-complete">Complete</span>';
+                    stats.collections++;
+                } else if (type === 'route') {
+                    badge = '<span class="badge badge-route">Route</span>';
+                    stats.routes++;
+                }
+                
+                stats.total++;
+                updateStats();
+                
+                const timestamp = new Date().toLocaleTimeString();
+                eventEl.innerHTML = `${badge} <strong>${timestamp}</strong>: <pre>${JSON.stringify(event, null, 2)}</pre>`;
+                
+                eventsContainer.insertBefore(eventEl, eventsContainer.firstChild);
+                
+                // Limit the number of events shown
+                if (eventsContainer.children.length > 100) {
+                    eventsContainer.removeChild(eventsContainer.lastChild);
+                }
+            }
+            
+            function connect() {
+                const url = wsUrlInput.value;
+                
+                try {
+                    socket = new WebSocket(url);
+                    
+                    socket.onopen = function() {
+                        statusEl.textContent = 'Connected';
+                        statusEl.className = 'status connected';
+                        connectBtn.disabled = true;
+                        disconnectBtn.disabled = false;
+                        subscribeBtn.disabled = false;
+                        
+                        addEvent({ message: 'WebSocket connection established' }, 'start');
+                    };
+                    
+                    socket.onmessage = function(event) {
+                        const data = JSON.parse(event.data);
+                        
+                        if (data.type === 'connection_established') {
+                            addEvent(data, 'start');
+                        } else if (data.type === 'subscription_update') {
+                            addEvent(data, 'start');
+                        } else if (data.event_type) {
+                            if (data.event_type === 'vehicle_position_update') {
+                                addEvent(data, 'data');
+                            } else if (data.event_type === 'vehicle_route_change') {
+                                addEvent(data, 'route');
+                            } else if (data.event_type === 'data_collection_start') {
+                                addEvent(data, 'start');
+                            } else if (data.event_type === 'data_collection_complete') {
+                                addEvent(data, 'complete');
+                            } else {
+                                addEvent(data, 'error');
+                            }
+                        } else {
+                            addEvent(data, 'error');
+                        }
+                    };
+                    
+                    socket.onclose = function() {
+                        statusEl.textContent = 'Disconnected';
+                        statusEl.className = 'status disconnected';
+                        connectBtn.disabled = false;
+                        disconnectBtn.disabled = true;
+                        subscribeBtn.disabled = true;
+                        
+                        addEvent({ message: 'WebSocket connection closed' }, 'error');
+                        socket = null;
+                    };
+                    
+                    socket.onerror = function(error) {
+                        addEvent({ message: 'WebSocket error', error: error.toString() }, 'error');
+                    };
+                    
+                } catch (error) {
+                    addEvent({ message: 'Failed to connect', error: error.toString() }, 'error');
+                }
+            }
+            
+            function disconnect() {
+                if (socket) {
+                    socket.close();
+                }
+            }
+            
+            function subscribe() {
+                if (!socket) return;
+                
+                const selectedEventType = eventTypeSelect.value;
+                let eventTypes = [];
+                
+                if (selectedEventType === 'all') {
+                    eventTypes = [
+                        'vehicle_position_update',
+                        'vehicle_route_change',
+                        'data_collection_start',
+                        'data_collection_complete'
+                    ];
+                } else {
+                    eventTypes = [selectedEventType];
+                }
+                
+                const subscriptionMessage = {
+                    action: 'subscribe',
+                    event_types: eventTypes
+                };
+                
+                socket.send(JSON.stringify(subscriptionMessage));
+                addEvent({ message: 'Subscribing to events', event_types: eventTypes }, 'start');
+            }
+            
+            function triggerCollection() {
+                fetch('http://localhost:8001/api/v1/events/trigger-event/data_collection_start', {
+                    method: 'POST'
+                })
+                .then(response => response.json())
+                .then(data => {
+                    addEvent({ message: 'Triggered data collection', response: data }, 'start');
+                })
+                .catch(error => {
+                    addEvent({ message: 'Failed to trigger data collection', error: error.toString() }, 'error');
+                });
+            }
+            
+            function clearEvents() {
+                eventsContainer.innerHTML = '<div class="event">Events cleared...</div>';
+            }
+            
+            // Event listeners
+            connectBtn.addEventListener('click', connect);
+            disconnectBtn.addEventListener('click', disconnect);
+            subscribeBtn.addEventListener('click', subscribe);
+            triggerCollectionBtn.addEventListener('click', triggerCollection);
+            clearEventsBtn.addEventListener('click', clearEvents);
+        });
+    </script>
+</body>
+</html> 
