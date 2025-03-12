@@ -11,13 +11,15 @@ This is a FastAPI application that collects and processes transit data from Upps
 - Integrated startup - all components start simultaneously
 - Supports manual triggering of data collection cycles
 - Docker containerization for easy deployment
+- CI/CD automation with GitHub Actions
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.11+
 - PostgreSQL database
 - Environment variables (see `.env.example`)
 - Docker (optional, for containerized deployment)
+- API key for Uppsala Länstrafik API
 
 ## Setup
 
@@ -179,4 +181,69 @@ The Docker image is built and pushed on every push to the `master` branch and wh
 The application includes robust error handling for:
 - Connection issues with the GTFS Realtime API
 - Database connection problems
-- Invalid WebSocket subscriptions 
+- Invalid WebSocket subscriptions
+
+## Development and Testing
+
+### Testing
+
+The project uses pytest for testing. To run the tests:
+
+```bash
+# Run all tests
+pytest
+
+# Run with coverage
+pytest --cov=app tests/
+
+# Generate coverage report
+coverage report
+```
+
+### Code Quality
+
+We use pylint for code quality checks:
+
+```bash
+# Run pylint on the app directory
+pylint app
+```
+
+Common issues found by pylint in this codebase include:
+- Logging f-string interpolation (use % formatting instead)
+- Broad exception catching
+- Imports outside toplevel
+- Singleton comparisons (use `is` instead of `==` for boolean constants)
+
+### CI/CD Pipeline
+
+The project uses GitHub Actions for CI/CD:
+1. Run tests and linting
+2. Build and push Docker image (on main branch or tags)
+3. Create GitHub release (on version tags)
+
+## Manual Control
+
+To manually trigger data collection outside the regular schedule:
+
+```bash
+curl -X POST http://localhost:8001/api/v1/events/trigger \
+  -H "Content-Type: application/json" \
+  -d '{"event_type": "data_collection_start", "data": {}}'
+```
+
+## Health Check
+
+Check if the application is running properly:
+
+```bash
+curl http://localhost:8001/health
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request 
