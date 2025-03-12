@@ -14,7 +14,8 @@ from fastapi import WebSocket
 # from fastapi import WebSocketDisconnect
 
 from app.models.event import EventLog, Subscription
-from app.schemas.event import EventCreate
+# Update the import to use existing schema classes instead of EventCreate which doesn't exist
+from app.schemas.event import EventMessage, EventLogCreate
 
 # In-memory storage for WebSocket connections
 active_connections: Dict[str, WebSocket] = {}
@@ -118,24 +119,26 @@ async def log_event_to_db(event_type: str, event_data: Dict[str, Any]) -> None:
     # Import inside function to avoid circular import
     from app.database.session import SessionLocal
     
-    event_create = EventCreate(
+    # Use EventMessage instead of EventCreate which doesn't exist
+    event_message = EventMessage(
         event_type=event_type,
         data=event_data,
-        created_at=datetime.now()
+        timestamp=datetime.now()
     )
     
     try:
         # Create event log entry
         with SessionLocal() as db:
             event_log = EventLog(
-                event_type=event_create.event_type,
-                data=event_create.data,
-                created_at=event_create.created_at,
+                event_type=event_message.event_type,
+                event_data=json.dumps(event_message.data),  # Convert to string as expected by the model
+                created_at=event_message.timestamp,
                 processed=False
             )
             db.add(event_log)
             db.commit()
-            logging.info("Logged event to database: %s", event_create.dict())
+            # Use dict() instead of model_dump() for compatibility
+            logging.info("Logged event to database: %s", event_message.dict())
     except Exception as ex:
         logging.error("Error logging event to database: %s", str(ex))
 
@@ -172,7 +175,7 @@ async def process_event_queue() -> None:
     try:
         with SessionLocal() as db:
             # Get unprocessed events
-            unprocessed_events = db.query(EventLog).filter(EventLog.processed is False).order_by(EventLog.created_at).all()
+            unprocessed_events = db.query(EventLog).filter(EventLog.processed == False).order_by(EventLog.created_at).all()
             
             if unprocessed_events:
                 logging.info("Processing %s unprocessed events", len(unprocessed_events))
@@ -181,8 +184,15 @@ async def process_event_queue() -> None:
                     # Get subscriptions for this event type
                     subscriptions = db.query(Subscription).filter(
                         Subscription.event_type == event.event_type,
-                        Subscription.is_active is True
+                        Subscription.is_active == True
                     ).all()
+                    
+                    # Parse event data from JSON string
+                    try:
+                        event_data = json.loads(event.event_data)
+                    except (json.JSONDecodeError, TypeError):
+                        logging.error("Invalid event data format for event ID %s", event.id)
+                        event_data = {"error": "Invalid data format"}
                     
                     # Broadcast to subscribers
                     for subscription in subscriptions:
@@ -190,7 +200,7 @@ async def process_event_queue() -> None:
                             conn = active_connections[subscription.client_id]
                             message = {
                                 "event": event.event_type,
-                                "data": event.data,
+                                "data": event_data,
                                 "timestamp": event.created_at.isoformat()
                             }
                             try:
@@ -227,7 +237,7 @@ async def get_subscriptions_for_event_type(event_type: str) -> List[Subscription
     with SessionLocal() as db:
         return db.query(Subscription).filter(
             Subscription.event_type == event_type,
-            Subscription.is_active is True
+            Subscription.is_active == True  # Use == for SQLAlchemy filter expressions
         ).all()
 
 async def broadcast_event(event_type: str, event_data: Dict[str, Any]) -> None:
